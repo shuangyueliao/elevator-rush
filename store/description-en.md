@@ -4,7 +4,7 @@
 
 One elevator, ten floors, zero patience. Call the car, pick up waiting riders
 and drop them at their floors before patience runs out. Far trips and combos
-score big. How many can you move in 90 seconds?
+score big. How many can you move?
 
 ## Details
 
