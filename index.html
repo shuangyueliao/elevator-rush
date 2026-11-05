@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="description" content="Elevator Rush — call the elevator, pick up waiting riders, drop them at their floor before patience runs out. Free single-file HTML5 time-management game.">
+<meta name="theme-color" content="#0b0e1a">
+<title>Elevator Rush · Elevator Time-Management</title>
+<script>
+// 平台 SDK 按域名条件加载（独立运行时完全不加载，游戏行为不变）
+(function () {
+  var host = location.hostname || "";
+  try {
+    if (host.indexOf("crazygames") !== -1) {
+      var s1 = document.createElement("script");
+      s1.src = "https://sdk.crazygames.com/crazygames-sdk-v3.js";
+      s1.onload = function () {
+        if (window.CrazyGames && window.CrazyGames.SDK) {
+          window.CrazyGames.SDK.init().then(function () {
+            try { window.CrazyGames.SDK.game.loadingStart(); } catch (e) {}
+            window.addEventListener("load", function () { try { window.CrazyGames.SDK.game.loadingStop(); } catch (e) {} });
+          }).catch(function () {});
+        }
+      };
+      document.head.appendChild(s1);
+      window.__portal = "crazygames";
+    } else if (host.indexOf("gamedistribution") !== -1 || host.indexOf("html5.gamedistribution.com") !== -1 || host.indexOf("gd.games") !== -1) {
+      var s2 = document.createElement("script");
+      s2.src = "https://sdk.gamedistribution.com/v2/main.min.js";
+      document.head.appendChild(s2);
+      window.__portal = "gamedistribution";
+    }
+  } catch (e) {}
+})();
+</script>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { height:100%; overflow:hidden; background:#07080f; font-family:-apple-system,"Segoe UI","PingFang SC",sans-serif; }
+  #wrap { height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  #hud { display:flex; justify-content:space-between; align-items:center; padding:8px 10px 4px; color:#e8e8f2; gap:6px; }
+  .stat { text-align:center; min-width:52px; }
+  .stat .label { font-size:10px; color:#8a8aa8; letter-spacing:1px; }
+  .stat .val { font-size:19px; font-weight:800; }
+  #hearts { font-size:17px; letter-spacing:2px; white-space:nowrap; }
+  #hearts .on { color:#ff4d5e; } #hearts .off { color:#343a52; }
+  #muteBtn { background:#1a2032; border:1px solid #333c5a; color:#aab3d0; border-radius:8px; width:34px; height:30px; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; }
+  #muteBtn:active { transform:scale(.94); }
+  #muteBtn .slash { display:none; }
+  #muteBtn.muted .slash { display:block; }
+  #muteBtn.muted .wave { opacity:.2; }
+  canvas { display:block; border-radius:12px; touch-action:none; }
+  #overlay { position:absolute; inset:0; display:none; align-items:center; justify-content:center; background:rgba(6,8,16,.8); backdrop-filter:blur(3px); z-index:5; border-radius:12px; }
+  #panel { background:#141a2c; border:1px solid #2c3654; border-radius:18px; padding:22px 26px; text-align:center; color:#fff; width:86%; max-width:380px; }
+  #panel h1 { font-size:26px; letter-spacing:3px; color:#ffd76a; margin-bottom:2px; }
+  #panel h2 { font-size:22px; margin-bottom:4px; }
+  #panel .sub { color:#9a9ac0; font-size:12px; margin-bottom:14px; }
+  #panel .modeBtn { display:block; width:100%; background:linear-gradient(135deg,#3d55e0,#7b3df0); color:#fff; border:none; border-radius:12px; padding:11px 10px 9px; font-size:16px; font-weight:800; cursor:pointer; margin-bottom:10px; letter-spacing:1px; }
+  #panel .modeBtn span { display:block; font-size:10.5px; font-weight:500; color:#d5d8ff; letter-spacing:0; margin-top:2px; }
+  #panel .modeBtn:active { transform:scale(.97); }
+  #panel .modeBtn.alt { background:linear-gradient(135deg,#0e9e8a,#1290c9); }
+  #panel .how { color:#8a8aa8; font-size:11px; line-height:1.55; margin-bottom:10px; }
+  #panel .bests { color:#ffd76a; font-size:12px; margin-bottom:2px; }
+  #panel .final { font-size:32px; font-weight:900; color:#ffd76a; margin:4px 0 8px; }
+  #panel .stats { color:#9a9ac0; font-size:12.5px; line-height:1.7; margin-bottom:12px; }
+  #panel .newbest { color:#7dffb0; font-size:13px; font-weight:800; letter-spacing:1px; margin-bottom:10px; }
+  #panel .row { display:flex; gap:10px; }
+  #panel .row button { flex:1; }
+  #panel .actBtn { background:linear-gradient(135deg,#5b6cff,#8a5bff); color:#fff; border:none; border-radius:12px; padding:12px 8px; font-size:15px; font-weight:800; cursor:pointer; letter-spacing:1px; }
+  #panel .actBtn.ghost { background:#232b44; color:#aab3d0; }
+  #panel .actBtn:active { transform:scale(.97); }
+  #footer { color:#55556e; font-size:11px; padding:5px; text-align:center; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="hud">
+    <div class="stat"><div class="label">SCORE</div><div class="val" id="score">0</div></div>
+    <div class="stat"><div class="label" id="timeLabel">TIME</div><div class="val" id="time">90</div></div>
+    <div class="stat"><div class="label">BEST</div><div class="val" id="best">0</div></div>
+    <div id="hearts"></div>
+    <button id="muteBtn" aria-label="Toggle sound">
+      <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
+        <path d="M3 9v6h4l5 4V5L7 9H3z" fill="currentColor"/>
+        <path class="wave" d="M15.5 8.5c2 2 2 5 0 7" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"/>
+        <line class="slash" x1="4" y1="4" x2="20" y2="20" stroke="#ff5b6e" stroke-width="2.6" stroke-linecap="round"/>
+      </svg>
+    </button>
+  </div>
+  <div style="position:relative">
+    <canvas id="game"></canvas>
+    <div id="overlay"><div id="panel"></div></div>
+  </div>
+  <div id="footer">Elevator Rush — a free time-management game</div>
+</div>
+<script>
+"use strict";
+// ================= 常量与布局 =================
+var W = 480, H = 720;
+var FLOORS_MAX = 12, CAP = 4, GOAL = 20, GAME_LEN = 90;
+var FLOOR_H = 56;
+var BUILD_BOTTOM = H - 14;                          // 一层行走面
+var BUILD_TOP = BUILD_BOTTOM - FLOORS_MAX * FLOOR_H + 2;
+var BUILD_L = 10, SHAFT_X = 332, SHAFT_W = 76, SHAFT_R = SHAFT_X + SHAFT_W;
+var SHAFT_CX = SHAFT_X + SHAFT_W / 2;
+var BTN_X = 416, BTN_W = 56, BTN_H = 34;
+var CAR_X = SHAFT_X + 6, CAR_W = SHAFT_W - 12, CAR_H = 44;
+var DOOR_OPEN = 0.25, DOOR_HOLD = 1.2, DOOR_CLOSE = 0.25;
+var VMAX = 5.5, ACC = 12;                           // 单位：楼层/秒
+
+var canvas = document.getElementById("game");
+var ctx = canvas.getContext("2d");
+var dpr = Math.min(window.devicePixelRatio || 1, 2);
+canvas.width = W * dpr; canvas.height = H * dpr;
+canvas.style.width = W + "px";
+ctx.scale(dpr, dpr);
+
+var scoreEl = document.getElementById("score");
+var timeEl = document.getElementById("time");
+var timeLabelEl = document.getElementById("timeLabel");
+var bestEl = document.getElementById("best");
+var heartsEl = document.getElementById("hearts");
+var overlayEl = document.getElementById("overlay");
+var panelEl = document.getElementById("panel");
+var hudEl = document.getElementById("hud");
+var footerEl = document.getElementById("footer");
+var muteBtn = document.getElementById("muteBtn");
+
+// ================= 存档 =================
+var bestClassic = 0, bestTime = 0, muted = false;
+try { bestClassic = parseInt(localStorage.getItem("er_best_classic") || "0", 10) || 0; } catch (e) {}
+try { bestTime = parseFloat(localStorage.getItem("er_best_time") || "0") || 0; } catch (e) {}
+try { muted = localStorage.getItem("er_muted") === "1"; } catch (e) {}
+function saveBest() {
+  try { localStorage.setItem("er_best_classic", String(bestClassic)); } catch (e) {}
+  try { localStorage.setItem("er_best_time", String(bestTime)); } catch (e) {}
+}
+
+// ================= 游戏状态 =================
+var state = "menu";      // menu | playing | over
+var mode = "classic";    // classic | challenge
+var score = 0, combo = 0, bestCombo = 0, hearts = 3;
+var elapsed = 0, timeLeft = GAME_LEN, unlocked = 10;
+var pax = [];            // 全部乘客（loc: wait|car|out|angry）
+var stops = [];          // 电梯待停楼层
+var pid = 0;
+var car = { fy: 1, floor: 1, v: 0, state: "idle", target: 0, doorT: 0, exchanged: false, fullFlash: 0 };
+var spawnTimer = 1, loseFlash = 0, lastTick = 99;
+var stats = { delivered: 0, angry: 0 };
+var events = [];         // 供测试核对的事件流水
+var floats = [], particles = [];
+var BODY_COLS = ["#ff6b81", "#4fc3f7", "#aed581", "#ffb74d", "#ba68c8", "#4dd0e1", "#f06292", "#7986cb", "#ffd76a", "#8ad6c0"];
+var SKINS = ["#ffd9b3", "#e8b98a", "#c68642", "#8d5524"];
+
+function floorY(f) { return BUILD_BOTTOM - (f - 1) * FLOOR_H; }
+function btnRect(f) { return { x: BTN_X, y: floorY(f) - 24 - BTN_H / 2, w: BTN_W, h: BTN_H }; }
+function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+// ================= 音效（WebAudio 合成） =================
+var actx = null;
+function beep(freq, dur, type, gainv, delay) {
+  if (muted) return;
+  try {
+    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === "suspended") actx.resume();
+    var t0 = actx.currentTime + (delay || 0);
+    var o = actx.createOscillator(), g = actx.createGain();
+    o.type = type || "sine"; o.frequency.value = freq;
+    g.gain.setValueAtTime(gainv || 0.1, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    o.connect(g); g.connect(actx.destination);
+    o.start(t0); o.stop(t0 + dur);
+  } catch (e) {}
+}
+function restartAudio() { try { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === "suspended") actx.resume(); } catch (e) {} }
+function sClick() { beep(640, 0.05, "square", 0.06); }
+function sDeny() { beep(150, 0.12, "square", 0.08); }
+function sDing() { beep(988, 0.09, "sine", 0.13); beep(1319, 0.24, "sine", 0.13, 0.09); }
+function sBoard() { beep(520, 0.05, "sine", 0.07); }
+function sDeliver(c) { beep(660 + Math.min(c, 6) * 70, 0.12, "triangle", 0.1); if (c >= 2) beep(880 + Math.min(c, 6) * 70, 0.1, "triangle", 0.08, 0.06); }
+function sAngry() { beep(240, 0.28, "sawtooth", 0.08); beep(175, 0.3, "sawtooth", 0.07, 0.12); }
+function sFull() { beep(130, 0.18, "square", 0.12); }
+function sHeart() { beep(110, 0.35, "sine", 0.14); }
+function sUnlock() { beep(784, 0.12, "triangle", 0.1); beep(1175, 0.18, "triangle", 0.1, 0.1); }
+function sOver() { beep(392, 0.18, "sawtooth", 0.08); beep(311, 0.18, "sawtooth", 0.08, 0.18); beep(233, 0.34, "sawtooth", 0.09, 0.36); }
+function sWin() { beep(523, 0.12, "triangle", 0.1); beep(659, 0.12, "triangle", 0.1, 0.11); beep(784, 0.12, "triangle", 0.1, 0.22); beep(1047, 0.3, "triangle", 0.12, 0.33); }
+function sTick() { beep(1000, 0.03, "square", 0.05); }
+
+// ================= 特效 =================
+function addFloat(x, y, text, color, life, big) { floats.push({ x: x, y: y, text: text, color: color, life: life || 0.9, max: life || 0.9, big: !!big }); }
+function sparks(x, y, color) {
+  for (var i = 0; i < 7; i++) {
+    var a = Math.random() * Math.PI * 2, s = 40 + Math.random() * 90;
+    particles.push({ x: x, y: y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 50, life: 0.45, color: color, size: 2 + Math.random() * 2.5 });
+  }
+}
+// 星空（仅装饰，一次性生成）
+var stars = [];
+(function () { for (var i = 0; i < 46; i++) stars.push({ x: Math.random() * W, y: Math.random() * H, r: Math.random() * 1.2 + 0.3, a: Math.random() * 0.5 + 0.15 }); })();
+
+// ================= 乘客 =================
+function countLoc(loc) { var n = 0; for (var i = 0; i < pax.length; i++) if (pax[i].loc === loc) n++; return n; }
+function waitAt(f) { var n = 0; for (var i = 0; i < pax.length; i++) if (pax[i].loc === "wait" && pax[i].floor === f) n++; return n; }
+
+function curPatience() { return mode === "challenge" ? 15 : lerp(15, 11, Math.min(1, elapsed / 75)); }
+function curSpawnInt() {
+  var base = mode === "challenge" ? 3.6 : lerp(5.0, 2.8, Math.min(1, elapsed / 75));
+  return base * (0.75 + Math.random() * 0.5);
+}
+function makePax(f, d) {
+  pid++;
+  pax.push({ id: pid, floor: f, dest: d, from: 0, loc: "wait", patience: curPatience(), patienceMax: curPatience(), col: BODY_COLS[pid % BODY_COLS.length], skin: SKINS[(pid * 3 + 1) % SKINS.length], animT: 0, x: 318, bx: 318 });
+}
+function trySpawn(force) {
+  if (!force && countLoc("wait") >= 6) return false;
+  var cand = [], f;
+  for (f = 1; f <= unlocked; f++) if (waitAt(f) < 3) cand.push(f);
+  if (!cand.length) return false;
+  f = cand[Math.floor(Math.random() * cand.length)];
+  var d = f;
+  while (d === f) d = 1 + Math.floor(Math.random() * unlocked);
+  makePax(f, d);
+  return true;
+}
+function board(p) {
+  p.loc = "car"; p.animT = 0; p.bx = p.x; p.from = p.floor;
+  sBoard();
+}
+function deliver(p) {
+  p.loc = "out"; p.animT = 0;
+  combo++; if (combo > bestCombo) bestCombo = combo;
+  var dist = Math.abs(p.dest - p.from);
+  var pts = 15 * dist + 10 * Math.min(combo - 1, 3);
+  score += pts;
+  stats.delivered++;
+  events.push({ type: "deliver", id: p.id, dist: dist, combo: combo, pts: pts });
+  scoreEl.textContent = String(score);
+  addFloat(SHAFT_CX - 4, floorY(p.dest) - 52, "+" + pts, "#ffd76a", 1.0);
+  if (combo >= 2) addFloat(SHAFT_CX - 4, floorY(p.dest) - 74, "COMBO x" + combo, "#ff9d3d", 1.0, true);
+  sparks(SHAFT_CX, floorY(p.dest) - 24, "#ffd76a");
+  sDeliver(combo);
+  if (mode === "challenge" && stats.delivered >= GOAL) endGame("CHALLENGE COMPLETE");
+}
+function anger(p) {
+  p.loc = "angry"; p.animT = 0;
+  combo = 0; hearts--; stats.angry++;
+  events.push({ type: "angry", id: p.id });
+  updateHearts();
+  loseFlash = 0.5;
+  addFloat(SHAFT_CX - 4, floorY(p.floor) - 52, "RAGE!", "#ff5b6e", 1.0);
+  sAngry(); sHeart();
+  if (hearts <= 0) endGame("OUT OF HEARTS");
+}
+function updatePax(dt) {
+  for (var i = pax.length - 1; i >= 0; i--) {
+    var p = pax[i];
+    if (p.loc === "wait") {
+      p.patience -= dt;
+      if (p.patience <= 0) { p.patience = 0; anger(p); }
+    } else if (p.loc === "car") {
+      if (p.animT < 1) p.animT = Math.min(1, p.animT + dt / 0.3);
+    } else if (p.loc === "out") {
+      p.animT += dt / 0.55;
+      if (p.animT >= 1) pax.splice(i, 1);
+    } else if (p.loc === "angry") {
+      p.animT += dt / 0.9;
+      if (p.animT >= 1) pax.splice(i, 1);
+    }
+  }
+}
+
+// ================= 电梯 =================
+function requestFloor(f) {
+  if (state !== "playing") return;
+  if (f < 1 || f > FLOORS_MAX || f > unlocked) { sDeny(); return; }
+  if (car.state === "door" && car.floor === f) return;      // 正在本层开门
+  if (car.state === "moving" && car.target === f) return;   // 正在驶向本层
+  if (stops.indexOf(f) >= 0) return;                        // 已在队列
+  stops.push(f);
+  sClick();
+}
+function pickNextStop() {
+  var bf = -1, bd = 1e9;
+  for (var i = 0; i < stops.length; i++) {
+    var d = Math.abs(stops[i] - car.fy);
+    if (d < bd) { bd = d; bf = stops[i]; }
+  }
+  if (bf < 0) return false;
+  stops = stops.filter(function (s) { return s !== bf; });
+  car.target = bf; car.state = "moving";
+  return true;
+}
+function arrive() {
+  car.fy = car.target; car.floor = car.target; car.v = 0;
+  car.state = "door"; car.doorT = 0; car.exchanged = false;
+  stops = stops.filter(function (s) { return s !== car.floor; });
+  sDing();
+}
+function doorOpenAmt() {
+  if (car.state !== "door") return 0;
+  var t = car.doorT;
+  if (t <= DOOR_OPEN) return t / DOOR_OPEN;
+  if (t <= DOOR_OPEN + DOOR_HOLD) return 1;
+  return Math.max(0, 1 - (t - DOOR_OPEN - DOOR_HOLD) / DOOR_CLOSE);
+}
+function exchange() {
+  var f = car.floor, i, p;
+  // 下客：送达本层目的地的乘客（挑战达标后立即终局，停止交接）
+  for (i = pax.length - 1; i >= 0; i--) {
+    if (state !== "playing") break;
+    p = pax[i];
+    if (p.loc === "car" && p.dest === f) deliver(p);
+  }
+  if (state !== "playing") return;
+  // 上客：按排队先后，受限载约束
+  var q = [];
+  for (i = 0; i < pax.length; i++) if (pax[i].loc === "wait" && pax[i].floor === f) q.push(pax[i]);
+  q.sort(function (a, b) { return a.id - b.id; });
+  var room = CAP - countLoc("car");
+  for (i = 0; i < q.length; i++) {
+    if (i < room) board(q[i]);
+    else {
+      car.fullFlash = 0.7;
+      addFloat(SHAFT_CX - 4, floorY(f) - 52, "FULL!", "#ff5b6e", 1.0, true);
+      sFull();
+      break;
+    }
+  }
+}
+function updateElevator(dt) {
+  if (car.fullFlash > 0) car.fullFlash = Math.max(0, car.fullFlash - dt);
+  if (car.state === "idle") {
+    if (stops.length) pickNextStop();
+  } else if (car.state === "moving") {
+    var remain = car.target - car.fy;
+    if (Math.abs(remain) < 1e-6) { arrive(); return; }
+    var dir = remain > 0 ? 1 : -1;
+    var brake = car.v * car.v / (2 * ACC);
+    if (Math.abs(remain) <= brake) car.v = Math.max(car.v - ACC * dt, 0.4);
+    else car.v = Math.min(car.v + ACC * dt, VMAX);
+    var step = car.v * dt;
+    if (Math.abs(remain) - step <= 0.001) arrive();
+    else car.fy += dir * step;
+  } else if (car.state === "door") {
+    car.doorT += dt;
+    if (!car.exchanged && car.doorT >= DOOR_OPEN) { car.exchanged = true; exchange(); }
+    if (car.doorT >= DOOR_OPEN + DOOR_HOLD + DOOR_CLOSE) car.state = "idle";
+  }
+}
+
+// ================= 主循环逻辑 =================
+function stepGame(dt) {
+  if (state !== "playing") return;
+  elapsed += dt;
+  // 难度递进：经典模式随时间解锁楼层
+  if (mode === "classic") {
+    while (unlocked < FLOORS_MAX && elapsed >= (unlocked === 10 ? 30 : 60)) {
+      unlocked++;
+      addFloat(W / 2 - 60, floorY(unlocked) - 30, "FLOOR " + unlocked + " OPEN", "#7dffb0", 1.4, true);
+      sUnlock();
+    }
+  }
+  // 计时
+  if (mode === "classic") {
+    timeLeft = GAME_LEN - elapsed;
+    var sec = Math.ceil(timeLeft);
+    if (sec <= 10 && sec >= 1 && sec !== lastTick) { lastTick = sec; sTick(); }
+    if (timeLeft <= 0) { timeLeft = 0; endGame("TIME'S UP"); return; }
+  }
+  // 刷人
+  spawnTimer -= dt;
+  if (spawnTimer <= 0) {
+    if (trySpawn(false)) spawnTimer = curSpawnInt();
+    else spawnTimer = 0.4;
+  }
+  updateElevator(dt);
+  if (state !== "playing") return; // endGame 可能在 exchange 内触发
+  updatePax(dt);
+  // 特效衰减
+  loseFlash = Math.max(0, loseFlash - dt);
+  for (var i = floats.length - 1; i >= 0; i--) {
+    var fl = floats[i]; fl.life -= dt; fl.y -= 26 * dt;
+    if (fl.life <= 0) floats.splice(i, 1);
+  }
+  for (var k = particles.length - 1; k >= 0; k--) {
+    var pt = particles[k]; pt.life -= dt;
+    pt.x += pt.vx * dt; pt.y += pt.vy * dt; pt.vy += 300 * dt;
+    if (pt.life <= 0) particles.splice(k, 1);
+  }
+  refreshHUD();
+}
+
+// ================= HUD =================
+function updateHearts() {
+  var s = "";
+  for (var i = 0; i < 3; i++) s += '<span class="' + (i < hearts ? "on" : "off") + '">\u2665</span>';
+  heartsEl.innerHTML = s;
+}
+function refreshHUD() {
+  if (mode === "classic") {
+    timeLabelEl.textContent = "TIME";
+    timeEl.textContent = String(Math.ceil(timeLeft));
+    timeEl.style.color = timeLeft <= 10 ? "#ff5b6e" : "#e8e8f2";
+  } else {
+    timeLabelEl.textContent = "RIDES";
+    timeEl.textContent = Math.min(stats.delivered, GOAL) + "/" + GOAL;
+    timeEl.style.color = "#e8e8f2";
+  }
+}
+function refreshBestHUD() {
+  bestEl.textContent = mode === "challenge" ? (bestTime ? bestTime.toFixed(1) + "s" : "-") : String(bestClassic);
+}
+
+// ================= 开局 / 结算 =================
+function startGame(m) {
+  mode = m;
+  score = 0; combo = 0; bestCombo = 0; hearts = 3;
+  elapsed = 0; timeLeft = GAME_LEN; lastTick = 99;
+  unlocked = (m === "challenge") ? FLOORS_MAX : 10;
+  pax = []; stops = []; pid = 0; floats = []; particles = []; events = [];
+  car = { fy: 1, floor: 1, v: 0, state: "idle", target: 0, doorT: 0, exchanged: false, fullFlash: 0 };
+  spawnTimer = 1.1; loseFlash = 0;
+  stats = { delivered: 0, angry: 0 };
+  state = "playing";
+  scoreEl.textContent = "0";
+  updateHearts(); refreshHUD(); refreshBestHUD();
+  overlayEl.style.display = "none";
+  trySpawn(true); trySpawn(true);
+  // 平台埋点：一局开始（域名守卫，仅 crazygames）
+  try {
+    if (window.__portal === "crazygames" && window.CrazyGames && window.CrazyGames.SDK) {
+      window.CrazyGames.SDK.game.gameplayStart();
+    }
+  } catch (e) {}
+}
+function endGame(reason) {
+  if (state !== "playing") return;
+  state = "over";
+  // 平台埋点：一局结束
+  try {
+    if (window.__portal === "crazygames" && window.CrazyGames && window.CrazyGames.SDK) {
+      window.CrazyGames.SDK.game.gameplayStop();
+      window.CrazyGames.SDK.game.happytime();
+    }
+  } catch (e) {}
+  var newBest = false, big, lines;
+  if (mode === "classic") {
+    big = String(score);
+    lines = "Delivered <b>" + stats.delivered + "</b> riders &middot; Lost <b>" + stats.angry + "</b><br>Best combo <b>x" + bestCombo + "</b>";
+    if (score > bestClassic) { bestClassic = score; newBest = true; }
+  } else {
+    var win = stats.delivered >= GOAL;
+    big = win ? elapsed.toFixed(1) + "s" : stats.delivered + "/" + GOAL;
+    lines = win ? "All <b>" + GOAL + "</b> riders delivered &middot; Lost <b>" + stats.angry + "</b><br>Best combo <b>x" + bestCombo + "</b>"
+                : "Hearts ran out at <b>" + stats.delivered + "/" + GOAL + "</b><br>Best combo <b>x" + bestCombo + "</b>";
+    if (win && (bestTime === 0 || elapsed < bestTime)) { bestTime = elapsed; newBest = true; }
+  }
+  if (newBest) saveBest();
+  refreshBestHUD();
+  sOver();
+  if (mode === "challenge" && stats.delivered >= GOAL) sWin();
+  panelEl.innerHTML =
+    "<h2>" + reason + "</h2>" +
+    (newBest ? '<div class="newbest">&#9733; NEW BEST!</div>' : '<div class="sub">Better luck next shift</div>') +
+    '<div class="final">' + big + "</div>" +
+    '<div class="stats">' + lines + "</div>" +
+    '<div class="row"><button class="actBtn" id="btnAgain">PLAY AGAIN</button>' +
+    '<button class="actBtn ghost" id="btnMenu">MENU</button></div>';
+  overlayEl.style.display = "flex";
+  document.getElementById("btnAgain").addEventListener("click", function () { restartAudio(); startGame(mode); });
+  document.getElementById("btnMenu").addEventListener("click", showMenu);
+}
+function showMenu() {
+  state = "menu";
+  pax = []; stops = []; floats = []; particles = [];
+  car = { fy: 1, floor: 1, v: 0, state: "idle", target: 0, doorT: 0, exchanged: false, fullFlash: 0 };
+  panelEl.innerHTML =
+    "<h1>ELEVATOR RUSH</h1>" +
+    '<div class="sub">One car. Ten floors. Zero patience.</div>' +
+    '<button class="modeBtn" id="btnClassic">CLASSIC<span>90 seconds &middot; survive the rush hour</span></button>' +
+    '<button class="modeBtn alt" id="btnChallenge">CHALLENGE<span>Deliver ' + GOAL + " riders &middot; no timer</span></button>" +
+    '<div class="how">Tap a floor button (or press keys 1-9, 0) to send the elevator.<br>It picks up waiting riders and drops them at their floor.<br>4 max in the car &middot; empty patience bar = a rider storms off.</div>' +
+    '<div class="bests" id="menuBests"></div>';
+  overlayEl.style.display = "flex";
+  refreshBestHUD();
+  var mb = document.getElementById("menuBests");
+  if (mb) mb.textContent = "Best classic: " + bestClassic + "  |  Best challenge: " + (bestTime ? bestTime.toFixed(1) + "s" : "-");
+  document.getElementById("btnClassic").addEventListener("click", function () { restartAudio(); startGame("classic"); });
+  document.getElementById("btnChallenge").addEventListener("click", function () { restartAudio(); startGame("challenge"); });
+  refreshHUD();
+}
+
+// ================= 绘制 =================
+function roundRect(c, x, y, w, h, rad) {
+  c.beginPath();
+  c.moveTo(x + rad, y);
+  c.arcTo(x + w, y, x + w, y + h, rad);
+  c.arcTo(x + w, y + h, x, y + h, rad);
+  c.arcTo(x, y + h, x, y, rad);
+  c.arcTo(x, y, x + w, y, rad);
+  c.closePath();
+}
+function drawPax(p, x, wy, alpha) {
+  ctx.globalAlpha = alpha;
+  // 身体
+  ctx.fillStyle = p.col;
+  roundRect(ctx, x - 7, wy - 22, 14, 18, 5); ctx.fill();
+  // 头
+  ctx.fillStyle = p.skin;
+  ctx.beginPath(); ctx.arc(x, wy - 28, 6, 0, Math.PI * 2); ctx.fill();
+  // 目的地标牌
+  ctx.fillStyle = "#10141f";
+  roundRect(ctx, x - 11, wy - 50, 22, 16, 3); ctx.fill();
+  ctx.strokeStyle = p.loc === "wait" && p.patience < 4 ? "#ff5b6e" : "#3a4763";
+  ctx.lineWidth = 1;
+  roundRect(ctx, x - 11, wy - 50, 22, 16, 3); ctx.stroke();
+  ctx.fillStyle = "#fff";
+  ctx.font = "800 11px -apple-system,'Segoe UI',sans-serif";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(String(p.dest), x, wy - 41.5);
+  // 愤怒标记
+  if (p.loc === "angry") {
+    ctx.fillStyle = "#ff5b6e";
+    ctx.font = "900 13px sans-serif";
+    ctx.fillText("!", x + 11, wy - 44);
+  }
+  // 耐心条（画在楼板前立面）
+  if (p.loc === "wait") {
+    var ratio = clamp(p.patience / p.patienceMax, 0, 1);
+    ctx.fillStyle = "rgba(0,0,0,.45)";
+    ctx.fillRect(x - 11, wy + 1.5, 22, 3);
+    ctx.fillStyle = "hsl(" + Math.round(ratio * 110) + ",80%,55%)";
+    ctx.fillRect(x - 11, wy + 1.5, 22 * ratio, 3);
+  }
+  ctx.globalAlpha = 1;
+}
+function drawCarFig(x, y, p) {
+  ctx.fillStyle = p.col;
+  roundRect(ctx, x - 4, y - 10, 8, 9, 2.5); ctx.fill();
+  ctx.fillStyle = p.skin;
+  ctx.beginPath(); ctx.arc(x, y - 13, 3.4, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.font = "700 7px sans-serif";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(String(p.dest), x, y - 20);
+}
+function draw() {
+  var i, f, p;
+  // 背景 + 星空
+  var bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, "#0b0e1a"); bg.addColorStop(1, "#131a2e");
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+  for (i = 0; i < stars.length; i++) {
+    var st = stars[i];
+    ctx.globalAlpha = st.a;
+    ctx.fillStyle = "#cdd6ff";
+    ctx.fillRect(st.x, st.y, st.r, st.r);
+  }
+  ctx.globalAlpha = 1;
+  // 地面
+  ctx.fillStyle = "#0d1120"; ctx.fillRect(0, BUILD_BOTTOM + 6, W, H - BUILD_BOTTOM - 6);
+  // 楼体背板
+  ctx.fillStyle = "#161c2e";
+  ctx.fillRect(BUILD_L, BUILD_TOP, SHAFT_R - BUILD_L, BUILD_BOTTOM - BUILD_TOP);
+  ctx.strokeStyle = "#2c3550"; ctx.lineWidth = 2;
+  ctx.strokeRect(BUILD_L, BUILD_TOP, SHAFT_R - BUILD_L, BUILD_BOTTOM - BUILD_TOP);
+  // 电梯井
+  ctx.fillStyle = "#0e1220";
+  ctx.fillRect(SHAFT_X, BUILD_TOP, SHAFT_W, BUILD_BOTTOM - BUILD_TOP);
+  ctx.strokeStyle = "#232c48"; ctx.lineWidth = 1;
+  ctx.strokeRect(SHAFT_X + 0.5, BUILD_TOP + 0.5, SHAFT_W - 1, BUILD_BOTTOM - BUILD_TOP - 1);
+  // 井道顶部机房 + 缆绳
+  ctx.fillStyle = "#232c48";
+  ctx.fillRect(SHAFT_X + 8, BUILD_TOP - 8, SHAFT_W - 16, 8);
+  var carTopY = floorY(car.fy) - CAR_H;
+  ctx.strokeStyle = "#8a93b8"; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(SHAFT_CX, BUILD_TOP); ctx.lineTo(SHAFT_CX, carTopY + 2); ctx.stroke();
+  // 各楼层
+  for (f = 1; f <= FLOORS_MAX; f++) {
+    var wy = floorY(f);
+    var locked = f > unlocked;
+    // 楼板
+    ctx.fillStyle = locked ? "#1a2136" : "#2c3550";
+    ctx.fillRect(BUILD_L, wy, SHAFT_R - BUILD_L, 6);
+    ctx.fillStyle = "rgba(255,255,255,.07)";
+    ctx.fillRect(BUILD_L, wy, SHAFT_R - BUILD_L, 1.5);
+    // 房间
+    if (!locked) {
+      ctx.fillStyle = f % 2 ? "#1d2440" : "#1b2238";
+      ctx.fillRect(BUILD_L, wy - FLOOR_H + 6, SHAFT_X - BUILD_L, FLOOR_H - 6);
+      // 暖光窗
+      for (i = 0; i < 3; i++) {
+        var wx = 30 + i * 62;
+        if ((f * 13 + i * 7) % 3 === 0) continue;
+        var wl = ctx.createLinearGradient(0, wy - 42, 0, wy - 20);
+        wl.addColorStop(0, "rgba(255,205,120,.75)"); wl.addColorStop(1, "rgba(255,160,70,.28)");
+        ctx.fillStyle = wl;
+        ctx.fillRect(wx, wy - 42, 34, 22);
+        ctx.strokeStyle = "#10141f"; ctx.lineWidth = 1.5;
+        ctx.strokeRect(wx, wy - 42, 34, 22);
+      }
+      // 层号
+      ctx.fillStyle = "rgba(200,210,255,.35)";
+      ctx.font = "700 9px sans-serif";
+      ctx.textAlign = "left"; ctx.textBaseline = "middle";
+      ctx.fillText(String(f), 14, wy - 3);
+    } else {
+      ctx.fillStyle = "rgba(0,0,0,.35)";
+      ctx.fillRect(BUILD_L, wy - FLOOR_H + 6, SHAFT_R - BUILD_L, FLOOR_H - 6);
+    }
+  }
+  // 等待 / 走入 / 走出 / 愤怒的乘客
+  for (f = 1; f <= unlocked; f++) {
+    var q = [];
+    for (i = 0; i < pax.length; i++) if (pax[i].loc === "wait" && pax[i].floor === f) q.push(pax[i]);
+    q.sort(function (a, b) { return a.id - b.id; });
+    for (i = 0; i < q.length; i++) { q[i].x = 318 - i * 26; drawPax(q[i], q[i].x, floorY(f), 1); }
+  }
+  // 轿厢
+  var cy = floorY(car.fy);
+  var doorOpen = car.state === "door" && car.fullFlash <= 0;
+  var bodyG = ctx.createLinearGradient(CAR_X, 0, CAR_X + CAR_W, 0);
+  bodyG.addColorStop(0, doorOpen ? "#fff4d6" : "#e7ecfa");
+  bodyG.addColorStop(1, "#b9c4de");
+  ctx.fillStyle = bodyG;
+  roundRect(ctx, CAR_X, cy - CAR_H, CAR_W, CAR_H, 5); ctx.fill();
+  ctx.strokeStyle = "#6d799e"; ctx.lineWidth = 1.5;
+  roundRect(ctx, CAR_X, cy - CAR_H, CAR_W, CAR_H, 5); ctx.stroke();
+  // 轿厢内乘客
+  var riders = [];
+  for (i = 0; i < pax.length; i++) if (pax[i].loc === "car" && pax[i].animT >= 1) riders.push(pax[i]);
+  for (i = 0; i < riders.length && i < CAP; i++) drawCarFig(CAR_X + 11 + i * 14, cy - 8, riders[i]);
+  // 超载红闪
+  if (car.fullFlash > 0) {
+    ctx.globalAlpha = Math.min(0.5, car.fullFlash);
+    ctx.fillStyle = "#ff2438";
+    roundRect(ctx, CAR_X, cy - CAR_H, CAR_W, CAR_H, 5); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  // 走入轿厢 / 送达走出 / 愤怒离开（画在轿厢之上、门之下）
+  for (i = 0; i < pax.length; i++) {
+    p = pax[i];
+    if (p.loc === "car" && p.animT < 1) drawPax(p, lerp(p.bx, SHAFT_CX - 4, p.animT), floorY(p.from), 1);
+    else if (p.loc === "out") drawPax(p, SHAFT_CX - 4 - p.animT * 70, floorY(p.dest), 1 - p.animT);
+    else if (p.loc === "angry") drawPax(p, p.x - p.animT * 90, floorY(p.floor), 1 - p.animT);
+  }
+  // 各层滑门（仅当前层动画，其余关闭；画在轿厢之上，穿层时轿厢被楼层门短暂遮挡）
+  for (f = 1; f <= FLOORS_MAX; f++) {
+    var fy2 = floorY(f);
+    if (fy2 < BUILD_TOP) continue;
+    var o = (f === car.floor && car.state === "door") ? doorOpenAmt() : 0;
+    var dxl = SHAFT_X + 2, dw = (SHAFT_W - 4) / 2, slide = (dw - 3) * o;
+    ctx.fillStyle = "#3a4763";
+    ctx.fillRect(dxl - slide, fy2 - 46, dw, 46);
+    ctx.fillRect(dxl + dw + slide, fy2 - 46, dw, 46);
+    ctx.strokeStyle = "#232c48"; ctx.lineWidth = 1;
+    if (slide < dw - 3) { ctx.beginPath(); ctx.moveTo(SHAFT_CX, fy2 - 46); ctx.lineTo(SHAFT_CX, fy2); ctx.stroke(); }
+    ctx.strokeRect(dxl - slide + 0.5, fy2 - 45.5, dw - 1, 45);
+    ctx.strokeRect(dxl + dw + slide + 0.5, fy2 - 45.5, dw - 1, 45);
+  }
+  // 楼层按钮列
+  ctx.fillStyle = "rgba(13,17,32,.72)";
+  roundRect(ctx, BTN_X - 6, BUILD_TOP - 4, BTN_W + 12, BUILD_BOTTOM - BUILD_TOP + 8, 10); ctx.fill();
+  for (f = 1; f <= FLOORS_MAX; f++) {
+    var b = btnRect(f);
+    var lk = f > unlocked;
+    var queued = stops.indexOf(f) >= 0 || (car.state === "moving" && car.target === f);
+    var here = car.floor === f && car.state !== "moving" && !lk;
+    ctx.fillStyle = lk ? "#141a2b" : queued ? "#8a5a17" : here ? "#1d5c3a" : "#232b44";
+    roundRect(ctx, b.x, b.y, b.w, b.h, 8); ctx.fill();
+    ctx.strokeStyle = lk ? "#1f2536" : queued ? "#ffb648" : here ? "#37d97a" : "#3a4763";
+    ctx.lineWidth = queued || here ? 2 : 1;
+    roundRect(ctx, b.x, b.y, b.w, b.h, 8); ctx.stroke();
+    ctx.fillStyle = lk ? "#3c4460" : queued ? "#ffe0a3" : here ? "#a9f5c8" : "#dfe6ff";
+    ctx.font = "800 15px -apple-system,'Segoe UI',sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(f === 10 ? "0" : String(f), b.x + b.w / 2, b.y + b.h / 2 + 0.5);
+  }
+  // 粒子
+  for (i = 0; i < particles.length; i++) {
+    var pt2 = particles[i];
+    ctx.globalAlpha = Math.max(0, pt2.life / 0.45);
+    ctx.fillStyle = pt2.color;
+    ctx.fillRect(pt2.x - pt2.size / 2, pt2.y - pt2.size / 2, pt2.size, pt2.size);
+  }
+  ctx.globalAlpha = 1;
+  // 浮动文字
+  for (i = 0; i < floats.length; i++) {
+    var fl2 = floats[i];
+    ctx.globalAlpha = Math.min(1, fl2.life / 0.35);
+    ctx.fillStyle = fl2.color;
+    ctx.font = (fl2.big ? "900 17px " : "800 14px ") + "-apple-system,'Segoe UI',sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(fl2.text, fl2.x, fl2.y);
+  }
+  ctx.globalAlpha = 1;
+  // 失心红闪
+  if (loseFlash > 0) {
+    ctx.globalAlpha = loseFlash * 0.55;
+    ctx.fillStyle = "#ff2438";
+    ctx.fillRect(0, 0, W, H);
+    ctx.globalAlpha = 1;
+  }
+}
+
+// ================= 帧循环 =================
+var last = 0;
+function frame(t) {
+  var dt = Math.max(0, Math.min((t - last) / 1000, 0.05)); last = t; // 钳制负帧与后台恢复的大帧
+  if (state === "playing") stepGame(dt);
+  draw();
+  requestAnimationFrame(frame);
+}
+
+// ================= 输入 =================
+function canvasPos(cx, cy) {
+  var r = canvas.getBoundingClientRect();
+  return { x: (cx - r.left) / r.width * W, y: (cy - r.top) / r.height * H };
+}
+function tapFloor(pt) {
+  for (var f = 1; f <= FLOORS_MAX; f++) {
+    var b = btnRect(f);
+    if (pt.x >= b.x && pt.x <= b.x + b.w && pt.y >= b.y && pt.y <= b.y + b.h) {
+      if (f > unlocked) { sDeny(); return; }
+      requestFloor(f);
+      return;
+    }
+  }
+}
+canvas.addEventListener("mousedown", function (e) { restartAudio(); tapFloor(canvasPos(e.clientX, e.clientY)); });
+canvas.addEventListener("touchstart", function (e) { e.preventDefault(); restartAudio(); tapFloor(canvasPos(e.touches[0].clientX, e.touches[0].clientY)); }, { passive: false });
+document.addEventListener("keydown", function (e) {
+  var k = e.key;
+  if (k >= "1" && k <= "9") { requestFloor(parseInt(k, 10)); return; }
+  if (k === "0") { requestFloor(10); return; }
+  if (k === "m" || k === "M") { toggleMute(); return; }
+  if (state === "over" && (k === "Enter" || k === " ")) { e.preventDefault(); restartAudio(); startGame(mode); }
+});
+function toggleMute() {
+  muted = !muted;
+  muteBtn.classList.toggle("muted", muted);
+  try { localStorage.setItem("er_muted", muted ? "1" : "0"); } catch (e) {}
+  if (!muted) sClick();
+}
+muteBtn.addEventListener("click", function (e) { e.stopPropagation(); restartAudio(); toggleMute(); });
+
+// ================= 自适应 =================
+function fitCanvas() {
+  var availW = Math.min(window.innerWidth || W, 520) - 8;
+  var hudH = hudEl.offsetHeight || 52, footH = footerEl.offsetHeight || 22;
+  var availH = (window.innerHeight || H) - hudH - footH - 14;
+  var s = Math.min(availW / W, availH / H, 1);
+  if (!(s > 0.3)) s = 0.5;
+  var cw = Math.round(W * s), ch = Math.round(H * s);
+  canvas.style.width = cw + "px";
+  canvas.style.height = ch + "px";
+  hudEl.style.width = cw + "px";
+  footerEl.style.width = cw + "px";
+}
+window.addEventListener("resize", fitCanvas);
+window.addEventListener("orientationchange", fitCanvas);
+
+// ================= 启动 =================
+muteBtn.classList.toggle("muted", muted);
+updateHearts();
+refreshBestHUD();
+fitCanvas();
+showMenu();
+requestAnimationFrame(frame);
+
+// 测试/调试钩子（不影响游戏逻辑）
+window.__er = {
+  ver: "1.0",
+  get state() { return state; }, get mode() { return mode; }, get score() { return score; },
+  get hearts() { return hearts; }, get combo() { return combo; }, get bestCombo() { return bestCombo; },
+  get unlocked() { return unlocked; }, get elapsed() { return elapsed; }, get timeLeft() { return timeLeft; },
+  get stats() { return stats; }, get events() { return events; },
+  get car() { return { fy: car.fy, floor: car.floor, v: car.v, state: car.state, target: car.target, doorT: car.doorT }; },
+  get stops() { return stops.slice(); },
+  pax: function () {
+    return pax.map(function (p) { return { id: p.id, floor: p.floor, dest: p.dest, from: p.from, loc: p.loc, patience: p.patience, max: p.patienceMax }; });
+  },
+  requestFloor: requestFloor,
+  tick: stepGame,
+  start: startGame
+};
+</script>
+</body>
+</html>
